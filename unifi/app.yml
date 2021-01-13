@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-unifi
+  namespace: unifi
+spec:
+  storageClassName: longhorn
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      #storage: $VOLUME_SIZE
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unifi
+  namespace: unifi
+  labels:
+    app: unifi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unifi
+  template:
+    metadata:
+      labels:
+        app: unifi
+    spec:
+      containers:
+      - env:
+        - name: TZ
+          value: Europe/London
+        image: jacobalberty/unifi:stable-6
+        imagePullPolicy: IfNotPresent
+        name: unifi-controller
+        ports:
+        - containerPort: 3478
+          name: stun
+          protocol: UDP
+        - containerPort: 8080
+          #hostPort: 8080
+          name: device-comms
+          protocol: TCP
+        - containerPort: 8443
+          name: https
+          protocol: TCP
+        resources:
+          limits:
+            memory: 1Gi
+          requests:
+            memory: 64Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /usr/lib/unifi
+          name: unifi
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: unifi
+        persistentVolumeClaim:
+          claimName: pvc-unifi
+
+
+#docker run --rm --init -p 8080:8080 -p 8443:8443 -p 3478:3478/udp -e TZ='Africa/Johannesburg' -v ~/unifi:/unifi --name unifi jacobalberty/unifi:stable
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: unifi
+  creationTimestamp: null
+  labels:
+    app: unifi
+  name: unifi-controller
+spec:
+  ports:
+    - name: "3478"
+      port: 3478
+      protocol: UDP
+      targetPort: 3478
+    - name: "8080"
+      port: 8080
+      targetPort: 8080
+    - name: "8443"
+      port: 8443
+      targetPort: 8443
+  selector:
+    app: unifi
